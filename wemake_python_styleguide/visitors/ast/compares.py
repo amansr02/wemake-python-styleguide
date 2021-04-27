@@ -7,6 +7,7 @@ from wemake_python_styleguide.compat.aliases import AssignNodes, TextNodes
 from wemake_python_styleguide.compat.functions import get_assign_targets
 from wemake_python_styleguide.logic import nodes, source, walk
 from wemake_python_styleguide.logic.naming.name_nodes import is_same_variable
+from wemake_python_styleguide.logic.safe_eval import literal_eval_with_names
 from wemake_python_styleguide.logic.tree import (
     compares,
     functions,
@@ -355,8 +356,24 @@ class WrongConditionalVisitor(BaseNodeVisitor):
         if isinstance(node.orelse, ast.NameConstant):
             conditions.add(node.orelse.value)
 
-        if conditions == {True, False}:
-            self.add_violation(SimplifiableIfViolation(node))
+        same_value = False
+        try:
+            left_child = literal_eval_with_names(node.body)
+        except Exception:
+            left_child = None
+
+        try:
+            right_child = literal_eval_with_names(node.orelse)
+        except Exception:
+            right_child = None
+        
+        if left_child is None or right_child is None:
+            same_value = False
+        else:
+            same_value = left_child == right_child
+
+        if conditions == {True, False} or same_value:
+                self.add_violation(SimplifiableIfViolation(node))
 
     def _check_nested_ifexpr(self, node: AnyIf) -> None:
         is_nested_in_if = bool(
